@@ -623,7 +623,7 @@ def build_prompt(
 
 {build_type_rules(content_type)}
 
-{cpa_common_rules(platform, cpa_links)}
+{cpa_common_rules(platform, cpa_links) if content_type in CPA_CONTENT_TYPES else "[비CPA 글]\nCPA 판매 문구, 예약 유도 문구, CPA 링크를 넣지 않는다."}
 
 ==================================================
 [사용자가 직접 제공한 실제 정보]
@@ -698,6 +698,13 @@ def build_prompt(
 12. 제목은 검색자가 실제로 입력할 만한 표현을 우선한다.
 13. 사용자가 입력하지 않은 정보는 '직접 입력 필요'라는 말을 남발하지 말고, 해당 내용을 생략한다.
 14. AI가 설명하는 말투를 쓰지 않는다.
+15. 연도는 사용자가 입력한 정보에 연도가 있을 때만 쓴다. 사용자가 8/1~8/25처럼 월/일만 입력했다면 2024년, 2025년, 2026년 등 연도를 절대 임의로 붙이지 않는다.
+16. 현재 날짜를 근거로 프로모션 종료일, 남은 일수, 마감 임박 등의 표현을 임의 계산하지 않는다. 사용자가 직접 입력한 경우에만 쓴다.
+17. 상품 설명에 적힌 혜택과 사용자의 직접 경험을 섞지 않는다. 상품 설명은 '상품 안내 기준'으로, 직접 경험은 '직접 다녀와 보니'처럼 구분할 수 있다.
+18. 사용자가 제공한 URL 외의 URL을 절대 만들어내지 않는다.
+19. 블로그명, 작성자명, '작성자:', '블로그:' 같은 메타정보를 본문 마지막에 반복해서 넣지 않는다.
+20. '공식 안내 기준', '상품 설명 기준' 같은 표현은 실제로 상품 안내에서 확인된 정보일 때만 필요한 위치에 자연스럽게 쓴다.
+21. 사용자가 입력하지 않은 지역별 특징, 아이 반응, 가족 반응, 이동시간, 시설 이용 경험을 만들어내지 않는다.
 
 ==================================================
 [매우 중요 - 최종 출력 형식]
@@ -1056,7 +1063,7 @@ CPA_CONTENT_TYPES = {
     "항공권 특가/프로모션",
     "렌터카",
 }
-is_cpa = content_type in CPA_CONTENT_TYPES or platform != "없음"
+is_cpa = content_type in CPA_CONTENT_TYPES
 
 if is_cpa:
     st.subheader("⑥ CPA 정보")
@@ -1306,7 +1313,15 @@ if generate:
                 max_output_tokens=9000,
             )
 
-            result = response.output_text
+            result = response.output_text.strip()
+
+            # 모델이 실수로 붙인 메타/코드블록 제거
+            result = re.sub(r"^```(?:markdown|md|text)?\s*", "", result, flags=re.IGNORECASE)
+            result = re.sub(r"\s*```$", "", result)
+            result = re.sub(r"^\s*(?:#\s*)?(?:최종 제목|추천 제목)\s*[:：]\s*", "", result, count=1)
+            result = re.sub(r"\n\s*(?:-\s*)?(?:블로그|블로그명)\s*[:：]\s*4인1견 가족, 유모차 특공대\s*$", "", result, flags=re.MULTILINE)
+            result = re.sub(r"\n\s*(?:-\s*)?작성자\s*[:：]\s*엠마더\s*$", "", result, flags=re.MULTILINE)
+            result = re.sub(r"\n{3,}", "\n\n", result).strip()
 
             st.session_state.generation_count += 1
             st.session_state.generated_result = result
@@ -1331,7 +1346,7 @@ if st.session_state.generated_result:
     st.text_area(
         "복사해서 사용할 수 있는 결과",
         st.session_state.generated_result,
-        height=1800,
+        height=2400,
     )
 
     st.caption(
