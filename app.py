@@ -458,7 +458,7 @@ CPA:
 {length}
 """
 
-    with st.spinner("EMMOTHER 스타일로 작성 중..."):
+with st.spinner("EMMOTHER 스타일로 작성 중..."):
 
         try:
 
