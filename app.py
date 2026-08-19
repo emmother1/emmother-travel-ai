@@ -1,5 +1,6 @@
 import streamlit as st
 from openai import OpenAI
+import requests
 
 st.set_page_config(
     page_title="EMMOTHER Travel AI",
@@ -17,7 +18,12 @@ st.caption("4인1견 가족여행 블로그 전용 · 여행 CPA 콘텐츠 제�
 client = OpenAI(
     api_key=st.secrets["OPENAI_API_KEY"]
 )
+# ------------------------
+# NAVER API
+# ------------------------
 
+NAVER_CLIENT_ID = st.secrets["NAVER_CLIENT_ID"]
+NAVER_CLIENT_SECRET = st.secrets["NAVER_CLIENT_SECRET"]
 # -------------------------
 # 사용량 제한
 # -------------------------
@@ -160,7 +166,53 @@ if generate:
     if not travel_info:
         st.warning("실제 여행 정보를 입력해주세요.")
         st.stop()
+    # ------------------------
+    # NAVER 블로그 검색
+    # ------------------------
 
+    naver_url = "https://naverapihub.apigw.ntruss.com/search/v1/blog"
+
+    naver_headers = {
+"X-NCP-APIGW-API-KEY-ID": NAVER_CLIENT_ID,
+"X-NCP-APIGW-API-KEY": NAVER_CLIENT_SECRET
+    }
+
+    naver_params = {
+    "query": keyword,
+    "display": 10,
+    "sort": "sim",
+    "format": "json"
+}
+
+    try:
+        naver_response = requests.get(
+            naver_url,
+            headers=naver_headers,
+            params=naver_params,
+            timeout=10
+        )
+
+        if naver_response.status_code == 200:
+            naver_data = naver_response.json()
+
+            naver_results = []
+
+            for item in naver_data.get("items", []):
+                naver_results.append(
+                    f"""
+제목: {item.get("title", "")}
+설명: {item.get("description", "")}
+블로그 URL: {item.get("link", "")}
+"""
+                )
+
+            naver_context = "\n".join(naver_results)
+
+        else:
+            naver_context = "네이버 검색 결과를 가져오지 못했습니다."
+
+    except Exception as e:
+        naver_context = "네이버 검색 중 오류가 발생했습니다."
     prompt = f"""
 너는 네이버 블로그 여행 콘텐츠를 전문적으로 작성하는
 'EMMOTHER Travel Editor'다.
@@ -422,7 +474,11 @@ CTA는 과장하지 않는다.
 - 내부링크 기회
 
 ==================================================
+[네이버 검색 결과]
 
+{naver_context}
+
+==================================================
 [사용자 입력]
 
 메인 키워드:
